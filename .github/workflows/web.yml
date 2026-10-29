@@ -31,10 +31,9 @@ jobs:
         working-directory: mobile
       - run: flutter pub get
         working-directory: mobile
-      - run: flutter build web --release --base-href /
+      - name: Build Flutter Web
+        run: flutter build web --release --base-href / --dart-define=API_BASE_URL="${{ vars.API_BASE_URL }}"
         working-directory: mobile
-        env:
-          API_BASE_URL: ${{ vars.API_BASE_URL }}
       - uses: actions/configure-pages@v5
         with:
           enablement: true
