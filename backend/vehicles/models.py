@@ -2,15 +2,18 @@ from django.conf import settings
 from django.db import models
 
 
+class UserProfile(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile")
+    phone = models.CharField(max_length=11, unique=True)
+
+    def __str__(self):
+        return self.user.username
+
+
 class Vehicle(models.Model):
     FUEL_CHOICES = [
-        ("petrol", "بنزین"),
-        ("diesel", "گازوئیل"),
-        ("hybrid", "هیبرید"),
-        ("electric", "برقی"),
-        ("lpg", "گاز مایع"),
-        ("cng", "گاز طبیعی"),
-        ("other", "سایر"),
+        ("petrol", "بنزین"), ("diesel", "گازوئیل"), ("hybrid", "هیبرید"),
+        ("electric", "برقی"), ("lpg", "گاز مایع"), ("cng", "گاز طبیعی"), ("other", "سایر"),
     ]
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="vehicles")
     nickname = models.CharField(max_length=80, blank=True)
@@ -21,25 +24,12 @@ class Vehicle(models.Model):
     fuel_type = models.CharField(max_length=16, choices=FUEL_CHOICES, default="petrol")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return f"{self.make} {self.model}"
+    class Meta: ordering = ["-created_at"]
+    def __str__(self): return f"{self.make} {self.model}"
 
 
 class MaintenanceRecord(models.Model):
-    CATEGORY_CHOICES = [
-        ("oil", "تعویض روغن"),
-        ("filter", "فیلتر"),
-        ("brakes", "ترمز"),
-        ("tires", "لاستیک"),
-        ("battery", "باتری"),
-        ("inspection", "بازبینی"),
-        ("repair", "تعمیر"),
-        ("other", "سایر"),
-    ]
+    CATEGORY_CHOICES = [("oil", "تعویض روغن"), ("filter", "فیلتر"), ("brakes", "ترمز"), ("tires", "لاستیک"), ("battery", "باتری"), ("inspection", "بازبینی"), ("repair", "تعمیر"), ("other", "سایر")]
     vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, related_name="maintenance_records")
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default="other")
     title = models.CharField(max_length=160)
@@ -49,22 +39,11 @@ class MaintenanceRecord(models.Model):
     currency = models.CharField(max_length=8, default="IRR")
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-service_date", "-id"]
+    class Meta: ordering = ["-service_date", "-id"]
 
 
 class Expense(models.Model):
-    CATEGORY_CHOICES = [
-        ("fuel", "سوخت"),
-        ("repair", "تعمیرات"),
-        ("maintenance", "سرویس"),
-        ("insurance", "بیمه"),
-        ("tax", "عوارض"),
-        ("parking", "پارکینگ"),
-        ("wash", "کارواش"),
-        ("other", "سایر"),
-    ]
+    CATEGORY_CHOICES = [("fuel", "سوخت"), ("repair", "تعمیرات"), ("maintenance", "سرویس"), ("insurance", "بیمه"), ("tax", "عوارض"), ("parking", "پارکینگ"), ("wash", "کارواش"), ("other", "سایر")]
     vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, related_name="expenses")
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default="other")
     title = models.CharField(max_length=160)
@@ -74,6 +53,4 @@ class Expense(models.Model):
     odometer_km = models.PositiveIntegerField(null=True, blank=True)
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-expense_date", "-id"]
+    class Meta: ordering = ["-expense_date", "-id"]
