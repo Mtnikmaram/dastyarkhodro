@@ -5,12 +5,16 @@ from .models import Vehicle, MaintenanceRecord, Expense
 class VehicleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vehicle
-        fields = ["id", "nickname", "make", "model", "year", "current_odometer_km", "fuel_type", "created_at", "updated_at"]
+        fields = ["id", "nickname", "make", "model", "year", "current_odometer_km", "fuel_type", "transmission", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
 
     def validate_year(self, value):
-        if value is not None and not 1885 <= value <= 2200:
-            raise serializers.ValidationError("سال ساخت معتبر نیست.")
+        # Accept both Gregorian and Jalali/Persian calendar years.
+        if value is not None:
+            jalali = 1300 <= value <= 1500
+            gregorian = 1885 <= value <= 2200
+            if not (jalali or gregorian):
+                raise serializers.ValidationError("سال ساخت معتبر نیست.")
         return value
 
 
