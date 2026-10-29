@@ -23,8 +23,11 @@ class MaintenanceRecordSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         vehicle = attrs.get("vehicle", getattr(self.instance, "vehicle", None))
         odo = attrs.get("odometer_km")
-        if vehicle and odo is not None and odo > max(vehicle.current_odometer_km, odo):
-            raise serializers.ValidationError({"odometer_km": "کیلومتر نامعتبر است."})
+        if vehicle and odo is not None and odo > vehicle.current_odometer_km:
+            raise serializers.ValidationError({"odometer_km": "کیلومتر ثبت‌شده نمی‌تواند از کیلومتر فعلی خودرو بیشتر باشد."})
+        cost = attrs.get("cost")
+        if cost is not None and cost < 0:
+            raise serializers.ValidationError({"cost": "هزینه نمی‌تواند منفی باشد."})
         return attrs
 
 
@@ -38,3 +41,10 @@ class ExpenseSerializer(serializers.ModelSerializer):
         if value < 0:
             raise serializers.ValidationError("مبلغ نمی‌تواند منفی باشد.")
         return value
+
+    def validate(self, attrs):
+        vehicle = attrs.get("vehicle", getattr(self.instance, "vehicle", None))
+        odo = attrs.get("odometer_km")
+        if vehicle and odo is not None and odo > vehicle.current_odometer_km:
+            raise serializers.ValidationError({"odometer_km": "کیلومتر ثبت‌شده نمی‌تواند از کیلومتر فعلی خودرو بیشتر باشد."})
+        return attrs
