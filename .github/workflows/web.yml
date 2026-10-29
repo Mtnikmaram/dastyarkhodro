@@ -36,6 +36,8 @@ jobs:
         env:
           API_BASE_URL: ${{ vars.API_BASE_URL }}
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: mobile/build/web
