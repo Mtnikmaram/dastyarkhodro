@@ -1,181 +1,36 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
-void main() => runApp(const DastyarKhodroApp());
+const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:8000/api/v1');
 
-class DastyarKhodroApp extends StatelessWidget {
-  const DastyarKhodroApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    const navy = Color(0xFF172B4D);
-    const teal = Color(0xFF10A7A0);
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'دستیار خودرو',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: teal, primary: navy),
-        scaffoldBackgroundColor: const Color(0xFFF5F7FA),
-        cardTheme: CardThemeData(
-          elevation: 0,
-          color: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        ),
-      ),
-      home: const DashboardPage(),
-    );
-  }
+class ApiClient {
+  String? accessToken;
+  Map<String, String> get headers => {'Content-Type': 'application/json', if (accessToken != null) 'Authorization': 'Bearer $accessToken'};
+  String error(http.Response r) { try { final d=jsonDecode(r.body); if(d is Map && d['detail']!=null)return d['detail'].toString(); return d.values.first.toString(); } catch(_){return 'خطا در ارتباط با سرور (${r.statusCode})';} }
+  Future<void> register(String u,String e,String p) async { final r=await http.post(Uri.parse('$apiBaseUrl/auth/register/'),headers:headers,body:jsonEncode({'username':u,'email':e,'password':p})); if(r.statusCode!=201)throw Exception(error(r)); }
+  Future<void> login(String u,String p) async { final r=await http.post(Uri.parse('$apiBaseUrl/auth/token/'),headers:headers,body:jsonEncode({'username':u,'password':p})); if(r.statusCode!=200)throw Exception(error(r)); accessToken=jsonDecode(r.body)['access']; }
+  Future<List<Map<String,dynamic>>> vehicles() async { final r=await http.get(Uri.parse('$apiBaseUrl/vehicles/'),headers:headers); if(r.statusCode!=200)throw Exception(error(r)); return List<Map<String,dynamic>>.from(jsonDecode(r.body)); }
+  Future<Map<String,dynamic>> addVehicle({required String nickname,required String make,required String model,required int year,required int odometer,required String fuelType}) async { final r=await http.post(Uri.parse('$apiBaseUrl/vehicles/'),headers:headers,body:jsonEncode({'nickname':nickname,'make':make,'model':model,'year':year,'current_odometer_km':odometer,'fuel_type':fuelType})); if(r.statusCode!=201)throw Exception(error(r)); return Map<String,dynamic>.from(jsonDecode(r.body)); }
 }
 
-class DashboardPage extends StatelessWidget {
-  const DashboardPage({super.key});
+void main()=>runApp(const App());
+class App extends StatelessWidget { const App({super.key}); @override Widget build(BuildContext c)=>MaterialApp(debugShowCheckedModeBanner:false,title:'دستیار خودرو',theme:ThemeData(useMaterial3:true,colorScheme:ColorScheme.fromSeed(seedColor:const Color(0xFF10A7A0)),scaffoldBackgroundColor:const Color(0xFFF5F7FA)),home:LoginPage(api:ApiClient())); }
 
-  void _notReady(BuildContext context, String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$feature در مرحله بعد فعال می‌شود.')),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        appBar: AppBar(
-          backgroundColor: const Color(0xFFF5F7FA),
-          title: const Text('دستیار خودرو', style: TextStyle(fontWeight: FontWeight.w800)),
-          actions: [
-            IconButton(onPressed: () => _notReady(context, 'اعلان‌ها'), icon: const Icon(Icons.notifications_none_rounded)),
-            const SizedBox(width: 8),
-          ],
-        ),
-        body: SafeArea(
-          child: LayoutBuilder(builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 760;
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1080),
-                child: ListView(
-                  padding: const EdgeInsets.all(20),
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(22),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(colors: [Color(0xFF172B4D), Color(0xFF244A73)]),
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('همه‌چیز درباره خودروی شما، یک‌جا', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                          SizedBox(height: 10),
-                          Text('خودرویت را بهتر بشناس', style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w800)),
-                          SizedBox(height: 8),
-                          Text('سرویس‌ها، هزینه‌ها و یادآوری‌ها را مدیریت کن.', style: TextStyle(color: Colors.white70)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    Row(
-                      children: [
-                        const Expanded(child: Text('نمای کلی', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800))),
-                        FilledButton.icon(
-                          onPressed: () => _notReady(context, 'افزودن خودرو'),
-                          icon: const Icon(Icons.add_rounded),
-                          label: const Text('افزودن خودرو'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    GridView.count(
-                      crossAxisCount: wide ? 3 : 1,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: wide ? 2.2 : 3.4,
-                      children: const [
-                        _MetricCard(icon: Icons.directions_car_filled_outlined, title: 'خودروهای من', value: 'هنوز خودرویی ثبت نشده', tint: Color(0xFFE8F2FF)),
-                        _MetricCard(icon: Icons.build_circle_outlined, title: 'سرویس‌های پیش رو', value: 'بعد از ثبت خودرو', tint: Color(0xFFE4F8F4)),
-                        _MetricCard(icon: Icons.payments_outlined, title: 'هزینه‌های ثبت‌شده', value: '۰', tint: Color(0xFFFFF2DD)),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-                    const Text('دسترسی سریع', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 12),
-                    GridView.count(
-                      crossAxisCount: wide ? 4 : 2,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: wide ? 1.5 : 1.15,
-                      children: [
-                        _ActionCard(icon: Icons.history_rounded, title: 'سوابق سرویس', subtitle: 'تعمیرات و نگهداری', onTap: () => _notReady(context, 'سوابق سرویس')),
-                        _ActionCard(icon: Icons.receipt_long_rounded, title: 'هزینه‌ها', subtitle: 'مدیریت مخارج', onTap: () => _notReady(context, 'هزینه‌ها')),
-                        _ActionCard(icon: Icons.notifications_active_outlined, title: 'یادآورها', subtitle: 'سرویس و بیمه', onTap: () => _notReady(context, 'یادآورها')),
-                        _ActionCard(icon: Icons.smart_toy_outlined, title: 'دستیار هوشمند', subtitle: 'راهنمای اولیه خودرو', onTap: () => _notReady(context, 'دستیار هوشمند')),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    const Center(child: Text('نسخه آزمایشی • ۰٫۱٫۰', style: TextStyle(color: Color(0xFF7D8798), fontSize: 12))),
-                  ],
-                ),
-              ),
-            );
-          }),
-        ),
-      ),
-    );
-  }
+class LoginPage extends StatefulWidget { const LoginPage({super.key,required this.api}); final ApiClient api; @override State<LoginPage> createState()=>_LoginPageState(); }
+class _LoginPageState extends State<LoginPage>{ final u=TextEditingController(),e=TextEditingController(),p=TextEditingController(); bool reg=false,busy=false;
+Future<void> submit()async{if(u.text.trim().isEmpty||p.text.isEmpty||(reg&&e.text.trim().isEmpty))return;setState(()=>busy=true);try{if(reg)await widget.api.register(u.text.trim(),e.text.trim(),p.text);await widget.api.login(u.text.trim(),p.text);if(mounted)Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>Dashboard(api:widget.api)));}catch(x){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(x.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>busy=false);}}
+@override Widget build(BuildContext c)=>Directionality(textDirection:TextDirection.rtl,child:Scaffold(body:Center(child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:430),child:Padding(padding:const EdgeInsets.all(24),child:Card(child:Padding(padding:const EdgeInsets.all(28),child:Column(mainAxisSize:MainAxisSize.min,children:[const Icon(Icons.directions_car_filled_rounded,size:54,color:Color(0xFF10A7A0)),const SizedBox(height:12),const Text('دستیار خودرو',style:TextStyle(fontSize:28,fontWeight:FontWeight.w900)),const SizedBox(height:6),const Text('مدیریت خودرو، سرویس و هزینه‌ها',style:TextStyle(color:Colors.grey)),const SizedBox(height:28),TextField(controller:u,decoration:const InputDecoration(labelText:'نام کاربری',prefixIcon:Icon(Icons.person_outline),border:OutlineInputBorder())),if(reg)...[const SizedBox(height:12),TextField(controller:e,decoration:const InputDecoration(labelText:'ایمیل',prefixIcon:Icon(Icons.email_outlined),border:OutlineInputBorder()))],const SizedBox(height:12),TextField(controller:p,obscureText:true,decoration:const InputDecoration(labelText:'رمز عبور',prefixIcon:Icon(Icons.lock_outline),border:OutlineInputBorder())),const SizedBox(height:18),SizedBox(width:double.infinity,height:50,child:FilledButton(onPressed:busy?null:submit,child:Text(busy?'در حال اتصال...':reg?'ساخت حساب':'ورود'))),TextButton(onPressed:busy?null:()=>setState(()=>reg=!reg),child:Text(reg?'حساب دارم؛ ورود':'حساب ندارم؛ ثبت‌نام'))])))))))); }
 }
 
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({required this.icon, required this.title, required this.value, required this.tint});
-  final IconData icon;
-  final String title;
-  final String value;
-  final Color tint;
-
-  @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(children: [
-        Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: tint, borderRadius: BorderRadius.circular(14)), child: Icon(icon, color: const Color(0xFF172B4D), size: 25)),
-        const SizedBox(width: 14),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(title, style: const TextStyle(color: Color(0xFF667085), fontSize: 13)),
-          const SizedBox(height: 5),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-        ])),
-      ]),
-    ),
-  );
+class Dashboard extends StatefulWidget { const Dashboard({super.key,required this.api}); final ApiClient api; @override State<Dashboard> createState()=>_DashboardState(); }
+class _DashboardState extends State<Dashboard>{List<Map<String,dynamic>> cars=[];bool loading=true;String? err;@override void initState(){super.initState();load();}Future<void>load()async{try{final d=await widget.api.vehicles();if(mounted)setState(()=>cars=d);}catch(x){if(mounted)setState(()=>err=x.toString().replaceFirst('Exception: ',''));}finally{if(mounted)setState(()=>loading=false);}}
+Future<void>add()async{final car=await showDialog<Map<String,dynamic>>(context:context,builder:(_)=>AddVehicle(api:widget.api));if(car!=null&&mounted){setState(()=>cars.insert(0,car));ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('خودرو با موفقیت ثبت شد.')));}}
+@override Widget build(BuildContext c)=>Directionality(textDirection:TextDirection.rtl,child:Scaffold(appBar:AppBar(title:const Text('دستیار خودرو',style:TextStyle(fontWeight:FontWeight.w900)),actions:[IconButton(onPressed:load,icon:const Icon(Icons.refresh_rounded))]),body:LayoutBuilder(builder:(c,x){final wide=x.maxWidth>=760;return Center(child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:1080),child:ListView(padding:const EdgeInsets.all(20),children:[Container(padding:const EdgeInsets.all(24),decoration:BoxDecoration(gradient:const LinearGradient(colors:[Color(0xFF172B4D),Color(0xFF244A73)]),borderRadius:BorderRadius.circular(24)),child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('همه‌چیز درباره خودروی شما، یک‌جا',style:TextStyle(color:Colors.white70)),SizedBox(height:8),Text('خودرویت را بهتر بشناس',style:TextStyle(color:Colors.white,fontSize:26,fontWeight:FontWeight.w900)),SizedBox(height:8),Text('سرویس‌ها، هزینه‌ها و یادآوری‌ها را مدیریت کن.',style:TextStyle(color:Colors.white70))])),const SizedBox(height:22),Row(children:[const Expanded(child:Text('خودروهای من',style:TextStyle(fontSize:20,fontWeight:FontWeight.w900))),FilledButton.icon(onPressed:add,icon:const Icon(Icons.add),label:const Text('افزودن خودرو'))]),const SizedBox(height:12),if(loading)const Padding(padding:EdgeInsets.all(35),child:Center(child:CircularProgressIndicator()))else if(err!=null)Card(child:Padding(padding:const EdgeInsets.all(20),child:Text('خطا: $err')))else if(cars.isEmpty)Card(child:Padding(padding:const EdgeInsets.all(28),child:Column(children:[const Icon(Icons.directions_car_outlined,size:55,color:Colors.grey),const SizedBox(height:12),const Text('هنوز خودرویی ثبت نکرده‌ای.'),const SizedBox(height:12),FilledButton.icon(onPressed:add,icon:const Icon(Icons.add),label:const Text('اولین خودرو را ثبت کن'))])))else GridView.count(shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),crossAxisCount:wide?2:1,mainAxisSpacing:12,crossAxisSpacing:12,childAspectRatio:wide?2.5:2.8,children:cars.map((v)=>CarCard(car:v)).toList()),const SizedBox(height:24),const Text('دسترسی سریع',style:TextStyle(fontSize:19,fontWeight:FontWeight.w900)),const SizedBox(height:12),GridView.count(shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),crossAxisCount:wide?4:2,mainAxisSpacing:12,crossAxisSpacing:12,childAspectRatio:1.25,children:const[ActionCard(icon:Icons.history,title:'سوابق سرویس',sub:'تعمیرات و نگهداری'),ActionCard(icon:Icons.receipt_long,title:'هزینه‌ها',sub:'مدیریت مخارج'),ActionCard(icon:Icons.notifications_active_outlined,title:'یادآورها',sub:'سرویس و بیمه'),ActionCard(icon:Icons.smart_toy_outlined,title:'دستیار هوشمند',sub:'راهنمای اولیه خودرو')])])));}));}
 }
+class CarCard extends StatelessWidget{const CarCard({super.key,required this.car});final Map<String,dynamic>car;@override Widget build(BuildContext c)=>Card(child:Padding(padding:const EdgeInsets.all(18),child:Row(children:[Container(padding:const EdgeInsets.all(13),decoration:BoxDecoration(color:const Color(0xFFE8F2FF),borderRadius:BorderRadius.circular(15)),child:const Icon(Icons.directions_car_filled_rounded,color:Color(0xFF172B4D),size:30)),const SizedBox(width:15),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,mainAxisAlignment:MainAxisAlignment.center,children:[Text('${car['make']} ${car['model']}',style:const TextStyle(fontWeight:FontWeight.w900,fontSize:18)),const SizedBox(height:5),Text('${car['nickname']} • ${car['current_odometer_km']} کیلومتر',style:const TextStyle(color:Colors.grey)),if(car['year']!=null)Text('مدل ${car['year']}',style:const TextStyle(color:Colors.grey,fontSize:12))]))])));}
+class ActionCard extends StatelessWidget{const ActionCard({super.key,required this.icon,required this.title,required this.sub});final IconData icon;final String title,sub;@override Widget build(BuildContext c)=>Card(child:Padding(padding:const EdgeInsets.all(15),child:Column(crossAxisAlignment:CrossAxisAlignment.start,mainAxisAlignment:MainAxisAlignment.center,children:[Icon(icon,color:const Color(0xFF10A7A0),size:28),const SizedBox(height:10),Text(title,style:const TextStyle(fontWeight:FontWeight.w800)),const SizedBox(height:4),Text(sub,style:const TextStyle(color:Colors.grey,fontSize:12))])));}
 
-class _ActionCard extends StatelessWidget {
-  const _ActionCard({required this.icon, required this.title, required this.subtitle, required this.onTap});
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Card(
-    child: InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(icon, color: const Color(0xFF10A7A0), size: 28),
-          const SizedBox(height: 14),
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-          const SizedBox(height: 5),
-          Text(subtitle, style: const TextStyle(color: Color(0xFF667085), fontSize: 12)),
-        ]),
-      ),
-    ),
-  );
-}
+class AddVehicle extends StatefulWidget{const AddVehicle({super.key,required this.api});final ApiClient api;@override State<AddVehicle> createState()=>_AddVehicleState();}
+class _AddVehicleState extends State<AddVehicle>{final n=TextEditingController(),m=TextEditingController(),mo=TextEditingController(),y=TextEditingController(),o=TextEditingController();String fuel='petrol';bool busy=false;Future<void>save()async{if(m.text.isEmpty||mo.text.isEmpty||o.text.isEmpty)return;setState(()=>busy=true);try{final v=await widget.api.addVehicle(nickname:n.text.isEmpty?'خودروی من':n.text,make:m.text,model:mo.text,year:int.tryParse(y.text)??DateTime.now().year,odometer:int.parse(o.text),fuelType:fuel);if(mounted)Navigator.pop(context,v);}catch(x){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(x.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>busy=false);}}
+@override Widget build(BuildContext c)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:const Text('افزودن خودرو'),content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:n,decoration:const InputDecoration(labelText:'نام خودرو')),const SizedBox(height:10),TextField(controller:m,decoration:const InputDecoration(labelText:'برند *')),const SizedBox(height:10),TextField(controller:mo,decoration:const InputDecoration(labelText:'مدل *')),const SizedBox(height:10),TextField(controller:y,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'سال')),const SizedBox(height:10),TextField(controller:o,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'کیلومتر فعلی *')),const SizedBox(height:10),DropdownButtonFormField<String>(initialValue:fuel,decoration:const InputDecoration(labelText:'نوع سوخت'),items:const[DropdownMenuItem(value:'petrol',child:Text('بنزین')),DropdownMenuItem(value:'diesel',child:Text('دیزل')),DropdownMenuItem(value:'hybrid',child:Text('هیبریدی')),DropdownMenuItem(value:'electric',child:Text('برقی')),DropdownMenuItem(value:'lpg',child:Text('LPG')),DropdownMenuItem(value:'cng',child:Text('CNG')),DropdownMenuItem(value:'other',child:Text('سایر'))],onChanged:(v){if(v!=null)setState(()=>fuel=v);})])),actions:[TextButton(onPressed:busy?null:()=>Navigator.pop(context),child:const Text('انصراف')),FilledButton(onPressed:busy?null:save,child:Text(busy?'در حال ثبت...':'ثبت خودرو'))]);}
