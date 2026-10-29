@@ -55,6 +55,19 @@ InputDecoration deco(String label, IconData icon) => InputDecoration(
   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
 );
 
+String normalizeDigits(String value) {
+  const fa = '۰۱۲۳۴۵۶۷۸۹';
+  const ar = '٠١٢٣٤٥٦٧٨٩';
+  final out = StringBuffer();
+  for (final ch in value.runes) {
+    final s = String.fromCharCode(ch);
+    final fi = fa.indexOf(s);
+    final ai = ar.indexOf(s);
+    out.write(fi >= 0 ? fi : ai >= 0 ? ai : s);
+  }
+  return out.toString();
+}
+
 String fuelName(dynamic value) {
   const names = {'petrol': 'بنزین', 'diesel': 'دیزل', 'hybrid': 'هیبریدی', 'electric': 'برقی', 'lpg': 'LPG', 'cng': 'CNG', 'other': 'سایر'};
   return names[value] ?? value.toString();
@@ -97,7 +110,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> submit() async {
     final user = username.text.trim();
-    final mobile = phone.text.trim().replaceAll(' ', '');
+    final mobile = normalizeDigits(phone.text.trim()).replaceAll(' ', '');
     if (user.isEmpty || password.text.length < 8) {
       msg('نام کاربری و رمز عبور حداقل ۸ کاراکتر الزامی است.');
       return;
@@ -346,10 +359,11 @@ class _AddVehicleState extends State<AddVehicle> {
   void msg(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
   Future<void> save() async {
-    final odometer = int.tryParse(odo.text.trim());
-    final buildYear = int.tryParse(year.text.trim());
+    final odometer = int.tryParse(normalizeDigits(odo.text.trim()));
+    final normalizedYear = normalizeDigits(year.text.trim());
+    final buildYear = int.tryParse(normalizedYear);
     if (nick.text.trim().isEmpty || make.text.trim().isEmpty || model.text.trim().isEmpty || odometer == null) { msg('نام خودرو، برند، مدل و کیلومتر الزامی است.'); return; }
-    if (year.text.trim().isNotEmpty && (buildYear == null || buildYear < 1885 || buildYear > 2200)) { msg('سال ساخت معتبر نیست.'); return; }
+    if (normalizedYear.isNotEmpty && (buildYear == null || (buildYear < 1300 || (buildYear > 1500 && buildYear < 1885)) || buildYear > 2200)) { msg('سال ساخت معتبر نیست.'); return; }
     setState(() => busy = true);
     try {
       final body = <String, dynamic>{'nickname': nick.text.trim(), 'make': make.text.trim(), 'model': model.text.trim(), 'current_odometer_km': odometer, 'fuel_type': fuel};
