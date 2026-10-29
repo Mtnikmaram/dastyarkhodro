@@ -30,16 +30,17 @@ class OwnedVehicleRecordsMixin:
     def get_queryset(self):
         return self.model.objects.filter(vehicle__owner=self.request.user)
 
-    def perform_create(self, serializer):
-        vehicle = serializer.validated_data["vehicle"]
+    def _assert_vehicle_owner(self, vehicle):
         if vehicle.owner_id != self.request.user.id:
             raise PermissionDenied("این خودرو متعلق به حساب شما نیست.")
+
+    def perform_create(self, serializer):
+        self._assert_vehicle_owner(serializer.validated_data["vehicle"])
         serializer.save()
 
     def perform_update(self, serializer):
         vehicle = serializer.validated_data.get("vehicle", serializer.instance.vehicle)
-        if vehicle.owner_id != self.request.user.id:
-            raise PermissionDenied("این خودرو متعلق به حساب شما نیست.")
+        self._assert_vehicle_owner(vehicle)
         serializer.save()
 
 
