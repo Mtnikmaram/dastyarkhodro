@@ -2,6 +2,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 from .models import Vehicle, MaintenanceRecord, Expense
 from .serializers import VehicleSerializer, MaintenanceRecordSerializer, ExpenseSerializer
 
@@ -32,7 +33,12 @@ class OwnedVehicleRecordsMixin:
     def perform_create(self, serializer):
         vehicle = serializer.validated_data["vehicle"]
         if vehicle.owner_id != self.request.user.id:
-            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("این خودرو متعلق به حساب شما نیست.")
+        serializer.save()
+
+    def perform_update(self, serializer):
+        vehicle = serializer.validated_data.get("vehicle", serializer.instance.vehicle)
+        if vehicle.owner_id != self.request.user.id:
             raise PermissionDenied("این خودرو متعلق به حساب شما نیست.")
         serializer.save()
 
