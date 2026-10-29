@@ -46,6 +46,16 @@ jobs:
       - name: Configure Flutter Web
         run: flutter create . --platforms web
         working-directory: mobile
+      - name: Disable stale Flutter service worker
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('mobile/web/flutter_bootstrap.js')
+          s = p.read_text()
+          s = s.replace('_flutter.loader.load();', '_flutter.loader.load({config: {serviceWorkerSettings: null}});')
+          p.write_text(s)
+          PY
+        working-directory: .
       - name: Set Flutter base href placeholder
         run: sed -i 's|<base href="[^"]*">|<base href="$FLUTTER_BASE_HREF">|' web/index.html
         working-directory: mobile
