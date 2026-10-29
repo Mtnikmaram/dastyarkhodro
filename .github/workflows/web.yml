@@ -31,7 +31,7 @@ jobs:
         working-directory: mobile
       - run: flutter pub get
         working-directory: mobile
-      - run: flutter build web --release --base-href /dastyarkhodro/
+      - run: flutter build web --release --base-href /
         working-directory: mobile
         env:
           API_BASE_URL: ${{ vars.API_BASE_URL }}
