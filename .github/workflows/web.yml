@@ -19,6 +19,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Patch vehicle form
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('mobile/lib/main.dart')
+          s = p.read_text()
+          replacements = [
+          ('''    out.write(fi >= 0 ? fi : ai >= 0 ? ai : s);''', '''    out.write(fi >= 0 ? fi.toString() : ai >= 0 ? ai.toString() : s);'''),
+          ('''  return out.toString();\n}\n\nString fuelName''', '''  return out.toString();\n}\n\nint? parseFlexibleInt(String value) {\n  final normalized = normalizeDigits(value)\n      .replaceAll(RegExp(r'[\\s,،٬]'), '')\n      .trim();\n  return int.tryParse(normalized);\n}\n\nString fuelName'''),
+          ('''  String fuel = 'petrol';\n  bool busy = false;''', '''  String fuel = 'petrol';\n  String transmission = 'manual';\n  bool busy = false;'''),
+          ('''    final odometer = int.tryParse(normalizeDigits(odo.text.trim()));\n    final normalizedYear = normalizeDigits(year.text.trim());\n    final buildYear = int.tryParse(normalizedYear);\n    if (nick.text.trim().isEmpty || make.text.trim().isEmpty || model.text.trim().isEmpty || odometer == null) { msg('نام خودرو، برند، مدل و کیلومتر الزامی است.'); return; }\n    if (normalizedYear.isNotEmpty && (buildYear == null || (buildYear < 1300 || (buildYear > 1500 && buildYear < 1885)) || buildYear > 2200)) { msg('سال ساخت معتبر نیست.'); return; }''', '''    final odometer = parseFlexibleInt(odo.text);\n    final buildYear = parseFlexibleInt(year.text);\n    if (nick.text.trim().isEmpty || make.text.trim().isEmpty || model.text.trim().isEmpty || odometer == null) { msg('نام خودرو، برند، مدل و کیلومتر الزامی است.'); return; }\n    if (year.text.trim().isNotEmpty && buildYear == null) { msg('سال ساخت را به صورت عدد وارد کن.'); return; }\n    if (buildYear != null && !((buildYear >= 1300 && buildYear <= 1500) || (buildYear >= 1885 && buildYear <= 2200))) { msg('سال ساخت معتبر نیست.'); return; }'''),
+          (''''current_odometer_km': odometer, 'fuel_type': fuel};''', ''''current_odometer_km': odometer, 'fuel_type': fuel, 'transmission': transmission};'''),
+          ('''      TextField(controller: odo, keyboardType: TextInputType.number, decoration: deco('کیلومتر فعلی', Icons.speed)), const SizedBox(height: 14),\n      DropdownButtonFormField<String>(value: fuel,''', '''      TextField(controller: odo, keyboardType: TextInputType.number, decoration: deco('کیلومتر فعلی', Icons.speed)), const SizedBox(height: 14),\n      DropdownButtonFormField<String>(value: transmission, decoration: deco('مدل گیربکس', Icons.settings_outlined), items: const [DropdownMenuItem(value: 'manual', child: Text('دستی')), DropdownMenuItem(value: 'automatic', child: Text('اتوماتیک')), DropdownMenuItem(value: 'cvt', child: Text('CVT')), DropdownMenuItem(value: 'amt', child: Text('AMT')), DropdownMenuItem(value: 'other', child: Text('سایر'))], onChanged: (v) { if (v != null) setState(() => transmission = v); }), const SizedBox(height: 14),\n      DropdownButtonFormField<String>(value: fuel,'''),
+          ]
+          for old, new in replacements:
+              if old not in s:
+                  raise SystemExit('Patch target not found: ' + old[:80])
+              s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.35.7'
