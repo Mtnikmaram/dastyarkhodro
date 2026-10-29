@@ -15,6 +15,9 @@ class Vehicle(models.Model):
         ("petrol", "بنزین"), ("diesel", "گازوئیل"), ("hybrid", "هیبرید"),
         ("electric", "برقی"), ("lpg", "گاز مایع"), ("cng", "گاز طبیعی"), ("other", "سایر"),
     ]
+    TRANSMISSION_CHOICES = [
+        ("manual", "دستی"), ("automatic", "اتوماتیک"), ("cvt", "CVT"), ("amt", "AMT"), ("other", "سایر"),
+    ]
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="vehicles")
     nickname = models.CharField(max_length=80, blank=True)
     make = models.CharField(max_length=80)
@@ -22,6 +25,7 @@ class Vehicle(models.Model):
     year = models.PositiveSmallIntegerField(null=True, blank=True)
     current_odometer_km = models.PositiveIntegerField(default=0)
     fuel_type = models.CharField(max_length=16, choices=FUEL_CHOICES, default="petrol")
+    transmission = models.CharField(max_length=16, choices=TRANSMISSION_CHOICES, default="manual")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     class Meta: ordering = ["-created_at"]
