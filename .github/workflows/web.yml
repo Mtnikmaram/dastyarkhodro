@@ -26,6 +26,9 @@ jobs:
       - name: Configure Flutter Web
         run: flutter create . --platforms web
         working-directory: mobile
+      - name: Set Flutter base href placeholder
+        run: sed -i 's|<base href="[^"]*">|<base href="$FLUTTER_BASE_HREF">|' web/index.html
+        working-directory: mobile
       - run: flutter pub get
         working-directory: mobile
       - run: flutter build web --release --base-href /dastyarkhodro/
