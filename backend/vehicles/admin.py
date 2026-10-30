@@ -18,6 +18,9 @@ class UserProfileAdmin(admin.ModelAdmin):
         return obj.user.date_joined
 
 
+admin.site.unregister(User)
+
+
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
     list_display = ("username", "first_name", "last_name", "phone", "is_active", "is_staff", "date_joined")
@@ -26,10 +29,10 @@ class UserAdmin(admin.ModelAdmin):
     ordering = ("-date_joined",)
     readonly_fields = ("date_joined", "last_login")
     fieldsets = (
-        ("اطلاعات ورود", {"fields": ("username", "password")} ),
-        ("اطلاعات شخصی", {"fields": ("first_name", "last_name", "email")} ),
-        ("دسترسی", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")} ),
-        ("تاریخچه", {"fields": ("last_login", "date_joined")} ),
+        ("اطلاعات ورود", {"fields": ("username", "password")}),
+        ("اطلاعات شخصی", {"fields": ("first_name", "last_name", "email")}),
+        ("دسترسی", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
+        ("تاریخچه", {"fields": ("last_login", "date_joined")}),
     )
 
     @admin.display(description="موبایل")
