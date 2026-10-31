@@ -19,32 +19,196 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Patch vehicle form
+      - name: Patch vehicle and record forms
+        working-directory: mobile
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('mobile/lib/main.dart')
+          p = Path('lib/main.dart')
           s = p.read_text()
-          replacements = [
-          ('''import 'package:flutter/material.dart';''', '''import 'package:flutter/material.dart';\nimport 'car_catalog.dart';'''),
-          ('''  return out.toString();\n}\n\nString fuelName''', '''  return out.toString();\n}\n\nint? parseFlexibleInt(String value) {\n  final normalized = normalizeDigits(value).replaceAll(RegExp(r'[\\s,،٬]'), '').trim();\n  return int.tryParse(normalized);\n}\n\nString _two(int value) => value.toString().padLeft(2, '0');\n\nString gregorianToJalali(DateTime date) {\n  int gy = date.year, gm = date.month, gd = date.day;\n  final gdm = [0,31,28,31,30,31,30,31,31,30,31,30,31];\n  final gy2 = gy + 1;\n  int days = 355666 + 365 * gy + ((gy2 + 3) ~/ 4) - ((gy2 + 99) ~/ 100) + ((gy2 + 399) ~/ 400) + gd;\n  for (int i = 1; i < gm; i++) days += gdm[i];\n  if (gm > 2 && ((gy % 4 == 0 && gy % 100 != 0) || gy % 400 == 0)) days += 1;\n  int jy = -1595 + 33 * (days ~/ 12053);\n  days %= 12053;\n  jy += 4 * (days ~/ 1461);\n  days %= 1461;\n  if (days > 365) { jy += (days - 1) ~/ 365; days = (days - 1) % 365; }\n  final int jm = days < 186 ? 1 + days ~/ 31 : 7 + (days - 186) ~/ 30;\n  final int jd = 1 + (days < 186 ? days % 31 : (days - 186) % 30);\n  return '[jy/\${_two(jm)}/\${_two(jd)}';\n}\n\nDateTime? jalaliToGregorian(String value) {\n  final parts = normalizeDigits(value).replaceAll('\\', '/').replaceAll('-', '/').split('/');\n  if (parts.length != 3) return null;\n  final jy = int.tryParse(parts[0]);\n  final jm = int.tryParse(parts[1]);\n  final jd = int.tryParse(parts[2]);\n  if (jy == null || jm == null || jd == null || jy < 1300 || jy > 1500 || jm < 1 || jm > 12 || jd < 1 || jd > 31) return null;\n  int gy = jy + 621;\n  final jy2 = jy - 979;\n  int days = 365 * jy2 + (jy2 ~/ 33) * 8 + ((jy2 % 33) + 3) ~/ 4;\n  if (jm <= 6) { days += (jm - 1) * 31 + jd - 1; } else { days += 186 + (jm - 7) * 30 + jd - 1; }\n  days += 79;\n  gy += 400 * (days ~/ 146097);\n  days %= 146097;\n  bool leap = true;\n  if (days >= 36525) { days--; gy += 100 * (days ~/ 36524); days %= 36524; if (days >= 365) days++; else leap = false; }\n  gy += 4 * (days ~/ 1461);\n  days %= 1461;\n  if (days >= 366) { leap = false; days--; gy += days ~/ 365; days %= 365; }\n  final gdm = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];\n  int gm = 1;\n  while (gm <= 12 && days >= gdm[gm - 1]) { days -= gdm[gm - 1]; gm++; }\n  if (gm > 12) return null;\n  return DateTime(gy, gm, days + 1);\n}\n\nString jalaliDisplayDate(dynamic value) {\n  final raw = value?.toString() ?? '';\n  final parts = raw.split(RegExp(r'[T ]'))[0].split('-');\n  if (parts.length != 3) return raw;\n  final gy = int.tryParse(parts[0]), gm = int.tryParse(parts[1]), gd = int.tryParse(parts[2]);\n  if (gy == null || gm == null || gd == null) return raw;\n  return gregorianToJalali(DateTime(gy, gm, gd));\n}\n\nString fuelName'''),
-          ('''${x['service_date']} • ${money(x['cost'])} ریال''', '''${jalaliDisplayDate(x['service_date'])} • ${money(x['cost'])} ریال'''),
-          ('''${x['expense_date']} • ${money(x['amount'])} ریال''', '''${jalaliDisplayDate(x['expense_date'])} • ${money(x['amount'])} ریال'''),
-          ('''${service ? x['service_date'] : x['expense_date']} • ${x['odometer_km'] ?? '-'} کیلومتر''', '''${service ? jalaliDisplayDate(x['service_date']) : jalaliDisplayDate(x['expense_date'])} • ${x['odometer_km'] ?? '-'} کیلومتر'''),
-          ('''  @override void initState() { super.initState(); date.text = DateTime.now().toIso8601String().substring(0, 10); odo.text = widget.odometer.toString(); category = widget.service ? 'oil' : 'fuel'; }''', '''  @override void initState() { super.initState(); date.text = gregorianToJalali(DateTime.now()); odo.text = money(widget.odometer); category = widget.service ? 'oil' : 'fuel'; }'''),
-          ('''    final odometer = int.tryParse(odo.text.trim()) ?? 0;\n    final value = double.tryParse(amount.text.replaceAll(',', '').trim());\n    if (title.text.trim().isEmpty || value == null) { msg('عنوان و مبلغ را کامل وارد کن.'); return; }''', '''    final odometer = parseFlexibleInt(odo.text) ?? 0;\n    final value = double.tryParse(normalizeDigits(amount.text).replaceAll(RegExp(r'[\\s,،٬]'), '').trim());\n    final apiDate = jalaliToGregorian(date.text.trim());\n    if (title.text.trim().isEmpty || value == null) { msg('عنوان و مبلغ را کامل وارد کن.'); return; }\n    if (apiDate == null) { msg('تاریخ شمسی معتبر وارد کن؛ مثال: ۱۴۰۵/۰۸/۰۹'); return; }\n    final isoDate = '${apiDate.year.toString().padLeft(4, '0')}-${_two(apiDate.month)}-${_two(apiDate.day)}';'''),
-          (''''service_date': date.text.trim(),''', ''''service_date': isoDate,'''),
-          (''''expense_date': date.text.trim(),''', ''''expense_date': isoDate,'''),
-          ('''TextField(controller: amount, keyboardType: TextInputType.number, decoration: deco('مبلغ (ریال)', Icons.currency_exchange)), const SizedBox(height: 14),\n      TextField(controller: date, decoration: deco('تاریخ YYYY-MM-DD', Icons.calendar_today)), const SizedBox(height: 14), TextField(controller: odo, keyboardType: TextInputType.number, decoration: deco('کیلومتر', Icons.speed)),''', '''TextField(controller: amount, keyboardType: TextInputType.number, onChanged: (v) { final raw = normalizeDigits(v).replaceAll(RegExp(r'[\\s,،٬]'), ''); final f = raw.replaceAllMapped(RegExp(r'(?<!^)(?=(\\d{3})+$)'), (_) => ','); if (f != v) amount.value = amount.value.copyWith(text: f, selection: TextSelection.collapsed(offset: f.length)); }, decoration: deco('مبلغ (ریال)', Icons.currency_exchange)), const SizedBox(height: 14),\n      TextField(controller: date, keyboardType: TextInputType.datetime, decoration: deco('تاریخ شمسی', Icons.calendar_today)), const SizedBox(height: 14), TextField(controller: odo, keyboardType: TextInputType.number, onChanged: (v) { final raw = normalizeDigits(v).replaceAll(RegExp(r'[\\s,،٬]'), ''); final f = raw.replaceAllMapped(RegExp(r'(?<!^)(?=(\\d{3})+$)'), (_) => ','); if (f != v) odo.value = odo.value.copyWith(text: f, selection: TextSelection.collapsed(offset: f.length)); }, decoration: deco('کیلومتر', Icons.speed)),'''),
-          ('''      DropdownButtonFormField<String>(value: category, decoration: deco('دسته‌بندی', Icons.category_outlined), items: categories.entries.map((e) => DropdownMenuItem<String>(value: e.key, child: Text(e.value))).toList(), onChanged: (v) { if (v != null) setState(() => category = v); }),''', '''      Directionality(textDirection: TextDirection.rtl, child: DropdownButtonFormField<String>(value: category, isExpanded: true, alignment: Alignment.centerRight, decoration: deco('دسته‌بندی', Icons.category_outlined), items: categories.entries.map((e) => DropdownMenuItem<String>(value: e.key, child: Align(alignment: Alignment.centerRight, child: Text(e.value)))).toList(), onChanged: (v) { if (v != null) setState(() => category = v); })),'''),
-          ('''      DropdownButtonFormField<String>(value: fuel,''', '''      Directionality(textDirection: TextDirection.rtl, child: DropdownButtonFormField<String>(value: fuel, isExpanded: true, alignment: Alignment.centerRight,'''),
-          ('''      const SizedBox(height: 24), SizedBox(height: 52, child: FilledButton.icon''', '''      const SizedBox(height: 24), SizedBox(height: 52, child: FilledButton.icon'''),
-          ]
-          for old, new in replacements:
-              if old not in s:
-                  raise SystemExit('Patch target not found: ' + old[:100])
-              s = s.replace(old, new, 1)
-          # Keep every record page dropdown item visually RTL without changing the backend contract.
+          if "import 'car_catalog.dart';" not in s:
+              s = s.replace("import 'package:flutter/material.dart';", "import 'package:flutter/material.dart';\nimport 'car_catalog.dart';", 1)
+
+          marker = "String fuelName"
+          if "String gregorianToJalali" not in s:
+              helpers = r'''int? parseFlexibleInt(String value) {
+            final normalized = normalizeDigits(value).replaceAll(RegExp(r'[\s,،٬]'), '').trim();
+            return int.tryParse(normalized);
+          }
+
+          String _two(int value) => value.toString().padLeft(2, '0');
+
+          String gregorianToJalali(DateTime date) {
+            final gy = date.year;
+            final gm = date.month;
+            final gd = date.day;
+            final gdm = [0,31,28,31,30,31,30,31,31,30,31,30,31];
+            final gy2 = gm > 2 ? gy + 1 : gy;
+            var days = 355666 + 365 * gy + ((gy2 + 3) ~/ 4) - ((gy2 + 99) ~/ 100) + ((gy2 + 399) ~/ 400) + gd;
+            for (var i = 1; i < gm; i++) days += gdm[i];
+            var jy = -1595 + 33 * (days ~/ 12053);
+            days %= 12053;
+            jy += 4 * (days ~/ 1461);
+            days %= 1461;
+            if (days > 365) { jy += (days - 1) ~/ 365; days = (days - 1) % 365; }
+            final jm = days < 186 ? 1 + days ~/ 31 : 7 + (days - 186) ~/ 30;
+            final jd = 1 + (days < 186 ? days % 31 : (days - 186) % 30);
+            return '$jy/${_two(jm)}/${_two(jd)}';
+          }
+
+          DateTime? jalaliToGregorian(String value) {
+            final parts = normalizeDigits(value).replaceAll('-', '/').replaceAll('\\', '/').split('/');
+            if (parts.length != 3) return null;
+            final jy = int.tryParse(parts[0]);
+            final jm = int.tryParse(parts[1]);
+            final jd = int.tryParse(parts[2]);
+            if (jy == null || jm == null || jd == null || jy < 1300 || jy > 1500 || jm < 1 || jm > 12 || jd < 1 || jd > 31) return null;
+            var jyear = jy + 1595;
+            var days = -355668 + 365 * jyear + (jyear ~/ 33) * 8 + ((jyear % 33 + 3) ~/ 4) + jd;
+            days += jm < 7 ? (jm - 1) * 31 : (jm - 7) * 30 + 186;
+            var gy = 400 * (days ~/ 146097);
+            days %= 146097;
+            if (days > 36524) {
+              days--;
+              gy += 100 * (days ~/ 36524);
+              days %= 36524;
+              if (days >= 365) days++;
+            }
+            gy += 4 * (days ~/ 1461);
+            days %= 1461;
+            if (days > 365) { gy += (days - 1) ~/ 365; days = (days - 1) % 365; }
+            final leap = (gy % 4 == 0 && gy % 100 != 0) || gy % 400 == 0;
+            final gdm = [31, leap ? 29 : 28, 31,30,31,30,31,31,30,31,30,31];
+            var gm = 0;
+            while (gm < 12 && days >= gdm[gm]) { days -= gdm[gm]; gm++; }
+            return DateTime(gy, gm + 1, days + 1);
+          }
+
+          String jalaliDisplayDate(dynamic value) {
+            final raw = value?.toString() ?? '';
+            final datePart = raw.split(RegExp(r'[T ]')).first;
+            final parts = datePart.split('-');
+            if (parts.length != 3) return raw;
+            final gy = int.tryParse(parts[0]);
+            final gm = int.tryParse(parts[1]);
+            final gd = int.tryParse(parts[2]);
+            if (gy == null || gm == null || gd == null) return raw;
+            return gregorianToJalali(DateTime(gy, gm, gd));
+          }
+
+          '''
+              s = s.replace(marker, helpers + marker, 1)
+
+          start = s.index("class _AddVehicleState extends State<AddVehicle> {")
+          end = s.index("class RecordPage extends StatefulWidget {")
+          add_vehicle = r'''class _AddVehicleState extends State<AddVehicle> {
+            final nick = TextEditingController();
+            final make = TextEditingController();
+            final model = TextEditingController();
+            final year = TextEditingController();
+            final odo = TextEditingController();
+            String fuel = 'petrol';
+            String transmission = 'manual';
+            bool busy = false;
+            void msg(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+            String fmt(String v) {
+              final raw = normalizeDigits(v).replaceAll(RegExp(r'[\s,،٬]'), '');
+              return raw.replaceAllMapped(RegExp(r'(?<!^)(?=(\d{3})+$)'), (_) => ',');
+            }
+            Widget search(TextEditingController c, String label, IconData icon, List<String> Function(String) options, {VoidCallback? changed}) => Autocomplete<String>(
+              textEditingController: c,
+              optionsBuilder: (v) { final q = v.text.trim().toLowerCase(); final all = options(v.text); return q.isEmpty ? all : all.where((x) => x.toLowerCase().contains(q)); },
+              onSelected: (v) { c.text = v; c.selection = TextSelection.collapsed(offset: v.length); changed?.call(); },
+              fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) => TextField(controller: controller, focusNode: focusNode, textDirection: TextDirection.rtl, decoration: deco(label, icon).copyWith(suffixIcon: const Icon(Icons.search))),
+            );
+            Future<void> save() async {
+              final odometer = parseFlexibleInt(odo.text);
+              final buildYear = parseFlexibleInt(year.text);
+              if (nick.text.trim().isEmpty || make.text.trim().isEmpty || model.text.trim().isEmpty || odometer == null) { msg('نام خودرو، برند، مدل و کیلومتر الزامی است.'); return; }
+              if (year.text.trim().isNotEmpty && (buildYear == null || !((buildYear >= 1300 && buildYear <= 1500) || (buildYear >= 1885 && buildYear <= 2200)))) { msg('سال ساخت معتبر نیست.'); return; }
+              setState(() => busy = true);
+              try {
+                final body = <String,dynamic>{'nickname': nick.text.trim(), 'make': make.text.trim(), 'model': model.text.trim(), 'current_odometer_km': odometer, 'fuel_type': fuel, 'transmission': transmission == 'cvt' ? 'CVT' : transmission == 'amt' ? 'AMT' : transmission};
+                if (buildYear != null) body['year'] = buildYear;
+                await widget.api.post('vehicles', body);
+                if (mounted) Navigator.pop(context, true);
+              } catch (e) { msg(e.toString().replaceFirst('Exception: ', '')); } finally { if (mounted) setState(() => busy = false); }
+            }
+            @override
+            Widget build(BuildContext context) {
+              final fields = <Widget>[
+                const Text('مشخصات خودرو', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)), const SizedBox(height: 20),
+                TextField(controller: nick, textDirection: TextDirection.rtl, decoration: deco('نام دلخواه خودرو', Icons.label_outline)), const SizedBox(height: 14),
+                search(make, 'برند', Icons.directions_car, (q) => catalogBrands(), changed: () { setState(() => model.clear()); }), const SizedBox(height: 14),
+                search(model, 'مدل', Icons.car_repair, (q) => catalogModelsFor(make.text.trim())), const SizedBox(height: 14),
+                TextField(controller: year, keyboardType: TextInputType.number, decoration: deco('سال ساخت (شمسی یا میلادی)', Icons.calendar_today_outlined)), const SizedBox(height: 14),
+                TextField(controller: odo, keyboardType: TextInputType.number, onChanged: (v) { final f = fmt(v); if (f != v) odo.value = odo.value.copyWith(text: f, selection: TextSelection.collapsed(offset: f.length)); }, decoration: deco('کیلومتر فعلی', Icons.speed)), const SizedBox(height: 14),
+                const Divider(height: 34),
+                const Align(alignment: Alignment.centerRight, child: Text('مشخصات فنی', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold))), const SizedBox(height: 10),
+                Directionality(textDirection: TextDirection.rtl, child: DropdownButtonFormField<String>(value: transmission, isExpanded: true, alignment: Alignment.centerRight, decoration: deco('مدل گیربکس', Icons.settings_outlined), items: const [DropdownMenuItem(value:'manual', child:Align(alignment:Alignment.centerRight, child:Text('دستی'))), DropdownMenuItem(value:'automatic', child:Align(alignment:Alignment.centerRight, child:Text('اتوماتیک'))), DropdownMenuItem(value:'cvt', child:Align(alignment:Alignment.centerRight, child:Text('CVT'))), DropdownMenuItem(value:'amt', child:Align(alignment:Alignment.centerRight, child:Text('AMT'))), DropdownMenuItem(value:'other', child:Align(alignment:Alignment.centerRight, child:Text('سایر')))], onChanged:(v){if(v!=null)setState(()=>transmission=v);})), const SizedBox(height:14),
+                Directionality(textDirection: TextDirection.rtl, child: DropdownButtonFormField<String>(value: fuel, isExpanded: true, alignment: Alignment.centerRight, decoration: deco('نوع سوخت', Icons.local_gas_station_outlined), items: const [DropdownMenuItem(value:'petrol', child:Align(alignment:Alignment.centerRight, child:Text('بنزین'))), DropdownMenuItem(value:'diesel', child:Align(alignment:Alignment.centerRight, child:Text('دیزل'))), DropdownMenuItem(value:'hybrid', child:Align(alignment:Alignment.centerRight, child:Text('هیبریدی'))), DropdownMenuItem(value:'electric', child:Align(alignment:Alignment.centerRight, child:Text('برقی'))), DropdownMenuItem(value:'lpg', child:Align(alignment:Alignment.centerRight, child:Text('LPG'))), DropdownMenuItem(value:'cng', child:Align(alignment:Alignment.centerRight, child:Text('CNG'))), DropdownMenuItem(value:'other', child:Align(alignment:Alignment.centerRight, child:Text('سایر')))], onChanged:(v){if(v!=null)setState(()=>fuel=v);})), const SizedBox(height:24),
+                SizedBox(height:52, child:FilledButton.icon(onPressed:busy?null:save, icon:const Icon(Icons.save), label:Text(busy?'در حال ذخیره...':'ثبت خودرو'))),
+              ];
+              return Directionality(textDirection:TextDirection.rtl, child:Scaffold(appBar:AppBar(title:const Text('افزودن خودرو')), body:ListView(padding:const EdgeInsets.all(20), children:fields)));
+            }
+          }
+
+          '''
+          s = s[:start] + add_vehicle + s[end:]
+
+          start = s.index("class _RecordPageState extends State<RecordPage> {")
+          record = r'''class _RecordPageState extends State<RecordPage> {
+            final title = TextEditingController();
+            final date = TextEditingController();
+            final odo = TextEditingController();
+            final amount = TextEditingController();
+            final notes = TextEditingController();
+            String category = 'other';
+            bool busy = false;
+            final serviceCategories = const {'oil':'روغن','filter':'فیلتر','brakes':'ترمز','tires':'لاستیک','battery':'باتری','inspection':'معاینه فنی','repair':'تعمیرات','other':'سایر'};
+            final expenseCategories = const {'fuel':'سوخت','repair':'تعمیرات','maintenance':'نگهداری','insurance':'بیمه','tax':'مالیات','parking':'پارکینگ','wash':'کارواش','other':'سایر'};
+            void msg(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+            String fmt(String v) { final raw = normalizeDigits(v).replaceAll(RegExp(r'[\s,،٬]'), ''); return raw.replaceAllMapped(RegExp(r'(?<!^)(?=(\d{3})+$)'), (_) => ','); }
+            @override void initState() { super.initState(); date.text = gregorianToJalali(DateTime.now()); odo.text = money(widget.odometer); category = widget.service ? 'oil' : 'fuel'; }
+            Future<void> save() async {
+              final odometer = parseFlexibleInt(odo.text) ?? 0;
+              final value = double.tryParse(normalizeDigits(amount.text).replaceAll(RegExp(r'[\s,،٬]'), '').trim());
+              final apiDate = jalaliToGregorian(date.text.trim());
+              if (title.text.trim().isEmpty || value == null) { msg('عنوان و مبلغ را کامل وارد کن.'); return; }
+              if (apiDate == null) { msg('تاریخ شمسی معتبر وارد کن؛ مثال: ۱۴۰۵/۰۸/۰۹'); return; }
+              final isoDate = '${apiDate.year.toString().padLeft(4,'0')}-${_two(apiDate.month)}-${_two(apiDate.day)}';
+              setState(() => busy = true);
+              try {
+                if (widget.service) {
+                  await widget.api.post('maintenance', {'vehicle':widget.vehicleId,'category':category,'title':title.text.trim(),'service_date':isoDate,'odometer_km':odometer,'cost':value,'currency':'IRR','notes':notes.text.trim()});
+                } else {
+                  await widget.api.post('expenses', {'vehicle':widget.vehicleId,'category':category,'title':title.text.trim(),'expense_date':isoDate,'odometer_km':odometer,'amount':value,'currency':'IRR','notes':notes.text.trim()});
+                }
+                if (mounted) Navigator.pop(context,true);
+              } catch(e) { msg(e.toString().replaceFirst('Exception: ','')); } finally { if(mounted)setState(()=>busy=false); }
+            }
+            @override Widget build(BuildContext context) {
+              final categories = widget.service ? serviceCategories : expenseCategories;
+              final fields = <Widget>[
+                Text(widget.service?'سرویس یا تعمیر جدید':'هزینه جدید',style:const TextStyle(fontSize:24,fontWeight:FontWeight.bold)), const SizedBox(height:20),
+                TextField(controller:title,textDirection:TextDirection.rtl,decoration:deco('عنوان',widget.service?Icons.build:Icons.payments)), const SizedBox(height:14),
+                Directionality(textDirection:TextDirection.rtl,child:DropdownButtonFormField<String>(value:category,isExpanded:true,alignment:Alignment.centerRight,decoration:deco('دسته‌بندی',Icons.category_outlined),items:categories.entries.map((e)=>DropdownMenuItem<String>(value:e.key,child:Align(alignment:Alignment.centerRight,child:Text(e.value)))).toList(),onChanged:(v){if(v!=null)setState(()=>category=v);})), const SizedBox(height:14),
+                TextField(controller:amount,keyboardType:TextInputType.number,onChanged:(v){final f=fmt(v);if(f!=v)amount.value=amount.value.copyWith(text:f,selection:TextSelection.collapsed(offset:f.length));},decoration:deco('مبلغ (ریال)',Icons.currency_exchange)), const SizedBox(height:14),
+                TextField(controller:date,keyboardType:TextInputType.datetime,decoration:deco('تاریخ شمسی (مثال ۱۴۰۵/۰۸/۰۹)',Icons.calendar_today)), const SizedBox(height:14),
+                TextField(controller:odo,keyboardType:TextInputType.number,onChanged:(v){final f=fmt(v);if(f!=v)odo.value=odo.value.copyWith(text:f,selection:TextSelection.collapsed(offset:f.length));},decoration:deco('کیلومتر',Icons.speed)), const SizedBox(height:14),
+                TextField(controller:notes,maxLines:3,textDirection:TextDirection.rtl,decoration:deco('توضیحات',Icons.notes)), const SizedBox(height:24),
+                SizedBox(height:52,child:FilledButton.icon(onPressed:busy?null:save,icon:const Icon(Icons.save),label:Text(busy?'در حال ذخیره...':'ذخیره'))),
+              ];
+              return Directionality(textDirection:TextDirection.rtl,child:Scaffold(appBar:AppBar(title:Text(widget.service?'ثبت سرویس':'ثبت هزینه')),body:ListView(padding:const EdgeInsets.all(20),children:fields)));
+            }
+          }
+          '''
+          s = s[:start] + record
+
+          # Always render saved API dates as Jalali in the dashboard.
+          s = s.replace("'${x['service_date']} • ${money(x['cost'])} ریال'", "'${jalaliDisplayDate(x['service_date'])} • ${money(x['cost'])} ریال'")
+          s = s.replace("'${x['expense_date']} • ${money(x['amount'])} ریال'", "'${jalaliDisplayDate(x['expense_date'])} • ${money(x['amount'])} ریال'")
+          s = s.replace("'${service ? x['service_date'] : x['expense_date']} • ${x['odometer_km'] ?? '-'} کیلومتر'", "'${service ? jalaliDisplayDate(x['service_date']) : jalaliDisplayDate(x['expense_date'])} • ${x['odometer_km'] ?? '-'} کیلومتر'")
           p.write_text(s)
           PY
       - uses: subosito/flutter-action@v2
