@@ -1,0 +1,90 @@
+name: Build and deploy Flutter Web v4
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages-v4
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply stable vehicle patch
+        working-directory: mobile
+        run: |
+          python3 - <<'PY'
+          import subprocess,textwrap
+          old=subprocess.check_output(['git','show','ad55f01d8de57afa90772591a782e839c68b2c9e:.github/workflows/web.yml'],text=True)
+          script=old.split("python3 - <<'PY'\n",1)[1].split("\n          PY",1)[0]
+          exec(textwrap.dedent(script),{})
+          PY
+      - name: Apply record management
+        working-directory: mobile
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/main.dart'); s=p.read_text()
+          marker='class App extends StatelessWidget {'
+          api="""class ApiClient {"""
+          insert="""\n  Future<void> patch(String path, Map<String, dynamic> body) async {\n    final r = await http.patch(Uri.parse('$apiBaseUrl/$path/'), headers: headers, body: jsonEncode(body));\n    if (r.statusCode != 200) throw Exception(error(r));\n  }\n  Future<void> delete(String path) async {\n    final r = await http.delete(Uri.parse('$apiBaseUrl/$path/'), headers: headers);\n    if (r.statusCode != 204) throw Exception(error(r));\n  }\n"""
+          pos=s.index(marker)
+          class_end=s.rfind('\n}',0,pos)
+          if 'Future<void> patch(String path' not in s: s=s[:class_end]+insert+s[class_end:]
+          a=s.index('  Widget records(bool service) {'); b=s.index('  Widget reminders() {',a)
+          records=r'''  Future<void> editRecord(dynamic record, bool service) async {
+            final ok=await showDialog<bool>(context:context,builder:(_)=>RecordEditDialog(api:widget.api,record:Map<String,dynamic>.from(record),service:service));
+            if(ok==true) await load();
+          }
+          Future<void> deleteRecord(dynamic record,bool service) async {
+            final yes=await showDialog<bool>(context:context,builder:(_)=>AlertDialog(title:const Text('حذف رکورد'),content:Text('«${record['title']??''}» حذف شود؟'),actions:[TextButton(onPressed:()=>Navigator.pop(context,false),child:const Text('انصراف')),FilledButton(onPressed:()=>Navigator.pop(context,true),child:const Text('حذف'))]));
+            if(yes!=true)return;
+            try{await widget.api.delete('${service?'maintenance':'expenses'}/${record['id']}');snack('رکورد حذف شد.');await load();}catch(e){snack(e.toString().replaceFirst('Exception: ',''));}
+          }
+          Widget records(bool service){
+            final list=service?myServices:myExpenses;
+            final title=service?'سوابق سرویس و تعمیرات':'هزینه‌های خودرو';
+            return ListView(padding:const EdgeInsets.fromLTRB(20,20,20,100),children:[Text(title,style:const TextStyle(fontSize:24,fontWeight:FontWeight.bold)),const SizedBox(height:16),if(list.isEmpty)Card(child:Padding(padding:const EdgeInsets.all(24),child:Text(service?'هنوز سرویس یا تعمیراتی ثبت نشده.':'هنوز هزینه‌ای ثبت نشده.'))) else ...list.map((x)=>Card(child:ListTile(onTap:()=>showDialog(context:context,builder:(_)=>AlertDialog(title:Text(x['title']??''),content:Text('تاریخ: ${jalaliDisplayDate(service?x['service_date']:x['expense_date'])}\nکیلومتر: ${money(x['odometer_km']??0)}\nمبلغ: ${money(service?x['cost']:x['amount'])} ریال\nتوضیحات: ${x['notes']??''}')),actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('بستن'))])),leading:CircleAvatar(child:Icon(service?Icons.build:Icons.payments)),title:Text(x['title']??''),subtitle:Text('${jalaliDisplayDate(service?x['service_date']:x['expense_date'])} • ${money(x['odometer_km']??0)} کیلومتر'),trailing:PopupMenuButton<String>(onSelected:(v){if(v=='edit')editRecord(x,service);if(v=='delete')deleteRecord(x,service);},itemBuilder:(_)=>const[PopupMenuItem(value:'edit',child:Text('ویرایش')),PopupMenuItem(value:'delete',child:Text('حذف'))]))))]);
+          }
+          '''
+          s=s[:a]+records+s[b:]
+          i=s.index('class AddVehicle extends StatefulWidget {')
+          dialog=r'''class RecordEditDialog extends StatefulWidget{const RecordEditDialog({super.key,required this.api,required this.record,required this.service});final ApiClient api;final Map<String,dynamic> record;final bool service;@override State<RecordEditDialog> createState()=>_RecordEditDialogState();}
+          class _RecordEditDialogState extends State<RecordEditDialog>{late final TextEditingController title,date,odo,amount,notes;late String category;bool busy=false;Map<String,String> get cats=>widget.service?const{'oil':'روغن','filter':'فیلتر','brakes':'ترمز','tires':'لاستیک','battery':'باتری','inspection':'معاینه فنی','repair':'تعمیرات','other':'سایر'}:const{'fuel':'سوخت','repair':'تعمیرات','maintenance':'نگهداری','insurance':'بیمه','tax':'مالیات','parking':'پارکینگ','wash':'کارواش','other':'سایر'};@override void initState(){super.initState();title=TextEditingController(text:widget.record['title']?.toString()??'');date=TextEditingController(text:jalaliDisplayDate(widget.service?widget.record['service_date']:widget.record['expense_date']));odo=TextEditingController(text:money(widget.record['odometer_km']??0));amount=TextEditingController(text:money(widget.service?widget.record['cost']:widget.record['amount']));notes=TextEditingController(text:widget.record['notes']?.toString()??'');category=widget.record['category']?.toString()??(widget.service?'oil':'fuel');if(!cats.containsKey(category))category=cats.keys.first;}Future<void> save()async{final d=jalaliToGregorian(date.text.trim());final km=parseFlexibleInt(odo.text)??0;final v=double.tryParse(normalizeDigits(amount.text).replaceAll(RegExp(r'[\s,،٬]'),'').trim());if(title.text.trim().isEmpty||v==null||d==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('عنوان، تاریخ شمسی و مبلغ را کامل کن.')));return;}final iso='${d.year.toString().padLeft(4,'0')}-${_two(d.month)}-${_two(d.day)}';setState(()=>busy=true);try{final body=<String,dynamic>{'category':category,'title':title.text.trim(),'odometer_km':km,'notes':notes.text.trim()};if(widget.service){body['service_date']=iso;body['cost']=v;}else{body['expense_date']=iso;body['amount']=v;}await widget.api.patch('${widget.service?'maintenance':'expenses'}/${widget.record['id']}',body);if(mounted)Navigator.pop(context,true);}catch(e){ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>busy=false);}}@override Widget build(BuildContext c)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:Text(widget.service?'ویرایش سرویس / تعمیر':'ویرایش هزینه'),content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:title,decoration:const InputDecoration(labelText:'عنوان',border:OutlineInputBorder())),const SizedBox(height:10),DropdownButtonFormField<String>(value:category,isExpanded:true,alignment:Alignment.centerRight,decoration:const InputDecoration(labelText:'دسته‌بندی',border:OutlineInputBorder()),items:cats.entries.map((e)=>DropdownMenuItem(value:e.key,child:Align(alignment:Alignment.centerRight,child:Text(e.value)))).toList(),onChanged:(v){if(v!=null)setState(()=>category=v);}),const SizedBox(height:10),TextField(controller:date,decoration:const InputDecoration(labelText:'تاریخ شمسی',hintText:'۱۴۰۵/۰۸/۰۹',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:odo,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'کیلومتر',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:amount,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'مبلغ (ریال)',border:OutlineInputBorder())),const SizedBox(height:10),TextField(controller:notes,maxLines:3,decoration:const InputDecoration(labelText:'توضیحات',border:OutlineInputBorder()))])),actions:[TextButton(onPressed:busy?null:()=>Navigator.pop(context,false),child:const Text('انصراف')),FilledButton(onPressed:busy?null:save,child:Text(busy?'در حال ذخیره...':'ذخیره تغییرات'))]));}
+          '''
+          s=s[:i]+dialog+s[i:];p.write_text(s)
+          PY
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.35.7'
+          channel: stable
+      - name: Set Flutter base href placeholder
+        run: sed -i 's|<base href="[^"]*">|<base href="$FLUTTER_BASE_HREF">|' web/index.html
+        working-directory: mobile
+      - run: flutter pub get
+        working-directory: mobile
+      - name: Build Flutter Web
+        run: flutter build web --release --base-href / --dart-define=API_BASE_URL="https://api-khodro.mtnikmaram.ir/api/v1"
+        working-directory: mobile
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: mobile/build/web
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
