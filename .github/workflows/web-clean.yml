@@ -33,7 +33,7 @@ jobs:
 
       - name: Build Flutter Web
         working-directory: mobile
-        run: flutter build web --release --base-href / --dart-define=API_BASE_URL=https://api-khodro.mtnikmaram.ir/api/v1
+        run: flutter build web --release --base-href / --no-web-resources-cdn --pwa-strategy=none --dart-define=API_BASE_URL=https://api-khodro.mtnikmaram.ir/api/v1
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
